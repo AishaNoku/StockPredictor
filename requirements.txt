@@ -11,3 +11,6 @@ langchain-community>=0.0.5
 torch>=2.0.0
 tensorflow
 keras
+transformers
+scikit-learn
+matplotlib
