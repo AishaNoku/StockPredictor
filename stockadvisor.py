@@ -34,7 +34,7 @@ llm = Ollama(model="llama3")
 # Returns the date string in YYYY-MM-DD format for use with yfinance API
 def sixty_days_back(date_str):
     date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-    new_date = date_obj - timedelta(days=100)
+    new_date = date_obj - timedelta(days=200)
     return new_date.strftime("%Y-%m-%d")
 
 # Takes a dataframe column and converts it to a 1-dimensional numpy array
