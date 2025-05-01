@@ -4,6 +4,11 @@ import torch
 import torch.nn.functional as F
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+import torch
+import torch.nn.functional as F
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+import pandas as pd
+
 class SentimentAnalysis:
     def __init__(self):
         # Load model and tokenizer directly from Hugging Face
@@ -23,19 +28,14 @@ class SentimentAnalysis:
             return probs  # [positive, neutral, negative] or [negative, neutral, positive]
         return probs
     
-def analyze_dataframe(self, df):
-    # Get sentiment probabilities for each article
-    sentiments = df['title'].apply(self.get_sentiment_probabilities)
-    
-    # Map the outputs to the expected format
-    df[['Negative', 'Neutral', 'Positive']] = pd.DataFrame(sentiments.tolist(), index=df.index)
-    
-    avg_sentiment = df[['Positive', 'Neutral', 'Negative']].mean()
-    
-    # Calculate sentiment score
-    sentiment_score = avg_sentiment['Positive'] - avg_sentiment['Negative']
-    
-    # Normalize to 0-1 range
-    normalized_score = (sentiment_score + 1) / 2
-    
-    return normalized_score
+    def analyze_dataframe(self, df):
+        # Get sentiment probabilities for each article
+        sentiments = df['title'].apply(self.get_sentiment_probabilities)
+        
+        # Map the outputs to the expected format
+        # Note: Check the label order of the model - may need adjustment
+        df[['Negative', 'Neutral', 'Positive']] = pd.DataFrame(sentiments.tolist(), index=df.index)
+        
+        avg_sentiment = df[['Positive', 'Neutral', 'Negative']].mean()
+        sentiment_score = avg_sentiment['Positive'] - avg_sentiment['Negative']
+        return sentiment_score
