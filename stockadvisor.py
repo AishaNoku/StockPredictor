@@ -148,121 +148,137 @@ target_str = target_date.strftime('%Y-%m-%d')
 
 if st.button("Predict Stock Price"):
     with st.spinner("🔍 Fetching and analyzing news..."):
-        predictor = TeslaPredictor()
-        sentiment_tool = SentimentAnalysis()
+        try:
+            predictor = TeslaPredictor()
+            sentiment_tool = SentimentAnalysis()
 
-        # Get news and classify for relevance to Tesla stock
-        df_news = predictor.get_and_classify_news(target_date.strftime('%Y%m%d'))
-        #filter to get relevant news only 
-        df_relevant = df_news[df_news['relevance'] == 'Relevant']
+            # Get news and classify for relevance to Tesla stock
+            df_news = predictor.get_and_classify_news(target_date.strftime('%Y%m%d'))
+            
+            # Fix for KeyError 'relevance': Check if column exists and add if missing
+            if 'relevance' not in df_news.columns:
+                st.warning("News relevance classification column missing. Treating all news as relevant.")
+                df_news['relevance'] = 'Relevant'  # Assume all news is relevant if classifier fails
+            
+            # Filter to get relevant news only
+            df_relevant = df_news[df_news['relevance'] == 'Relevant']
 
-        if df_relevant.empty:
-            st.warning("No relevant news found for the selected date.")
-            sentiment_score = 0.0
-        else:
-            sentiment_score = sentiment_tool.analyze_dataframe(df_relevant)
-        st.write(f"🧠 Sentiment Score: {sentiment_score:.4f}")
+            if df_relevant.empty:
+                st.warning("No relevant news found for the selected date.")
+                sentiment_score = 0.5  # Neutral sentiment if no relevant news
+            else:
+                sentiment_score = sentiment_tool.analyze_dataframe(df_relevant)
+            
+            st.write(f"🧠 Sentiment Score: {sentiment_score:.4f}")
+        except Exception as e:
+            st.error(f"Error processing news: {str(e)}")
+            sentiment_score = 0.5  # Default to neutral sentiment on error
 
-
-        # This section:
+    # This section:
     # 1. Retrieves historical Tesla stock prices
     # 2. Combines price data with news sentiment
     # 3. Uses the LSTM model to predict the next day's closing price
-
-
     with st.spinner("📈 Getting stock data and predicting..."):
-        prices = get_60day_history(target_str)
+        try:
+            prices = get_60day_history(target_str)
 
-        if len(prices) < 60:
-            st.error("⚠️ Not enough stock price data. Need 60 days of closing prices.")
-        else:
-
-            X_input = prepare_lstm_input(prices, sentiment_score)
-            
-            raw_pred = lstm_model.predict(X_input)
-
-            padded = np.hstack([raw_pred, np.zeros((raw_pred.shape[0], 1))])  # shape (1, 2)
-            
-            inversed = scaler.inverse_transform(padded)[0][0]
-            predicted_price = inversed
-
-            st.success(f"📈 Predicted Closing Price for {target_str}: ${predicted_price:.2f}")
-
-            latest_price = prices[-1]
-            decision = ""
-            if predicted_price > latest_price * 1.02:
-                decision = "BUY"
-            elif predicted_price < latest_price * 0.98:
-                decision = "SELL"
+            if len(prices) < 60:
+                st.error("⚠️ Not enough stock price data. Need 60 days of closing prices.")
             else:
-                decision = "HOLD"
-
-            # Data Visualization: Historical prices on a line graph and a plotted point + Predicted Prices
-            date_range = pd.date_range(start=sixty_days_back(target_str), end=target_str)
-            if len(date_range) > len(prices):
-                date_range = date_range[-len(prices):]  
-
-            fig = go.Figure()
-
-            # Plot historical closing prices
-            fig.add_trace(go.Scatter(
-                x=date_range,
-                y=prices,
-                mode='lines+markers',
-                name='Actual Closing Price',
-                line=dict(color='blue')
-            ))
-            
-            # Add predicted price as a red dot
-            predicted_date = target_date + timedelta(days=1)
-            fig.add_trace(go.Scatter(
-                x=[predicted_date],
-                y=[predicted_price],
-                mode='markers',
-                name='Predicted Price',
-                marker=dict(color='red', size=10, symbol='circle')
+                X_input = prepare_lstm_input(prices, sentiment_score)
                 
+                raw_pred = lstm_model.predict(X_input)
+
+                padded = np.hstack([raw_pred, np.zeros((raw_pred.shape[0], 1))])  # shape (1, 2)
+                
+                inversed = scaler.inverse_transform(padded)[0][0]
+                predicted_price = inversed
+
+                st.success(f"📈 Predicted Closing Price for {target_str}: ${predicted_price:.2f}")
+
+                latest_price = prices[-1]
+                decision = ""
+                if predicted_price > latest_price * 1.02:
+                    decision = "BUY"
+                elif predicted_price < latest_price * 0.98:
+                    decision = "SELL"
+                else:
+                    decision = "HOLD"
+
+                # Data Visualization: Historical prices on a line graph and a plotted point + Predicted Prices
+                date_range = pd.date_range(start=sixty_days_back(target_str), end=target_str)
+                if len(date_range) > len(prices):
+                    date_range = date_range[-len(prices):]  
+
+                fig = go.Figure()
+
+                # Plot historical closing prices
+                fig.add_trace(go.Scatter(
+                    x=date_range,
+                    y=prices,
+                    mode='lines+markers',
+                    name='Actual Closing Price',
+                    line=dict(color='blue')
                 ))
-            
-            fig.update_layout(
-                title=f"TSLA: Last 60 Days & Predicted Price for {predicted_date.strftime('%Y-%m-%d')}",
-                xaxis_title="Date",
-                yaxis_title="Price (USD)",
-                legend_title="Legend",
-                template="plotly_white"
-                )
-            
-            st.plotly_chart(fig, use_container_width=True)
+                
+                # Add predicted price as a red dot
+                predicted_date = target_date + timedelta(days=1)
+                fig.add_trace(go.Scatter(
+                    x=[predicted_date],
+                    y=[predicted_price],
+                    mode='markers',
+                    name='Predicted Price',
+                    marker=dict(color='red', size=10, symbol='circle')
+                    
+                    ))
+                
+                fig.update_layout(
+                    title=f"TSLA: Last 60 Days & Predicted Price for {predicted_date.strftime('%Y-%m-%d')}",
+                    xaxis_title="Date",
+                    yaxis_title="Price (USD)",
+                    legend_title="Legend",
+                    template="plotly_white"
+                    )
+                
+                st.plotly_chart(fig, use_container_width=True)
 
+                st.subheader("🧠 Suggested Action:")
+                st.success(f"{decision}")
 
-            st.subheader("🧠 Suggested Action:")
-            st.success(f"{decision}")
-
-            # Prompting LLM to justify decision 
-            stock_summary = f"""
-            Stock: {symbol}
-            Closing Price on {target_str}: ${latest_price:.2f}
-            Predicted Closing Price: ${predicted_price:.2f}
-            Sentiment Score: {sentiment_score:.2f}
-            """
-
-            prompt = PromptTemplate(
-                input_variables=["summary"],
-                template="""
-                Analyze the following stock data and predict whether the user should BUY, HOLD, or SELL Tesla stock.
-                Justify your recommendation using evidence from the price trend and sentiment score.
-
-                {summary}
+                # Prompting LLM to justify decision 
+                stock_summary = f"""
+                Stock: {symbol}
+                Closing Price on {target_str}: ${latest_price:.2f}
+                Predicted Closing Price: ${predicted_price:.2f}
+                Sentiment Score: {sentiment_score:.2f}
                 """
-            )
 
-            advice = get_investment_recommendation(symbol, latest_price, predicted_price, sentiment_score)
-            # Display the LLM's financial analysis and reasoning
-            st.subheader("🧠 LLM Financial Reasoning:")
-            st.info(advice)
+                prompt = PromptTemplate(
+                    input_variables=["summary"],
+                    template="""
+                    Analyze the following stock data and predict whether the user should BUY, HOLD, or SELL Tesla stock.
+                    Justify your recommendation using evidence from the price trend and sentiment score.
+
+                    {summary}
+                    """
+                )
+
+                advice = get_investment_recommendation(symbol, latest_price, predicted_price, sentiment_score)
+                # Display the LLM's financial analysis and reasoning
+                st.subheader("🧠 LLM Financial Reasoning:")
+                st.info(advice)
+        except Exception as e:
+            st.error(f"Error in prediction process: {str(e)}")
 
     with st.expander("📰 Show News and Relevance"):
-        if not df_news.empty:
-            st.dataframe(df_news[['title', 'relevance']])
+        if 'df_news' in locals() and not df_news.empty:
+            try:
+                st.dataframe(df_news[['title', 'relevance']])
+            except KeyError:
+                if 'title' not in df_news.columns:
+                    st.write("News data doesn't contain expected columns. Raw data:")
+                    st.dataframe(df_news)
+                else:
+                    st.dataframe(df_news[['title']])
         else:
             st.write("No news data available.")
