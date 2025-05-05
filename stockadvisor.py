@@ -14,8 +14,6 @@ from datetime import date, datetime, timedelta
 import yfinance as yf
 from langchain.prompts import PromptTemplate
 from langchain_community.llms import Ollama
-from langchain_huggingface import HuggingFaceEndpoint
-
 from relevant_news_predictor import TeslaPredictor
 from sentiment_implementation import SentimentAnalysis
 
