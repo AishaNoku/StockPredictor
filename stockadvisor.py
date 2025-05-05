@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 import yfinance as yf
 from langchain.prompts import PromptTemplate
 from langchain_community.llms import Ollama
+from langchain_huggingface import HuggingFaceEndpoint
 
 from relevant_news_predictor import TeslaPredictor
 from sentiment_implementation import SentimentAnalysis
@@ -27,7 +28,71 @@ from datetime import timedelta
 
 lstm_model = joblib.load("lstm_model.joblib")
 scaler = joblib.load("scaler.pkl")
-llm = Ollama(model="llama3")
+
+def get_investment_recommendation(symbol, latest_price, predicted_price, sentiment_score):
+    # Calculate price change percentage
+    price_change_pct = ((predicted_price - latest_price) / latest_price) * 100
+    
+    # Determine basic recommendation
+    if price_change_pct > 2:  # More than 2% increase predicted
+        recommendation = "BUY"
+        confidence = min(abs(price_change_pct) / 5, 1) * 100  # Scale confidence (max 100%)
+    elif price_change_pct < -2:  # More than 2% decrease predicted
+        recommendation = "SELL"
+        confidence = min(abs(price_change_pct) / 5, 1) * 100
+    else:
+        recommendation = "HOLD"
+        confidence = (1 - min(abs(price_change_pct) / 2, 1)) * 100
+    
+    # Factor in sentiment
+    sentiment_text = "very positive" if sentiment_score > 0.75 else "positive" if sentiment_score > 0.6 else \
+                    "neutral" if sentiment_score > 0.4 else "negative" if sentiment_score > 0.25 else "very negative"
+    
+    # Generate reasoning based on the data
+    if recommendation == "BUY":
+        reasoning = f"""
+        Based on the predictive analysis of Tesla (TSLA) stock, I recommend a BUY position with {confidence:.1f}% confidence.
+        
+        Key factors supporting this recommendation:
+        
+        1. Price Momentum: The model predicts a price increase of {price_change_pct:.2f}% from ${latest_price:.2f} to ${predicted_price:.2f}, indicating positive momentum.
+        
+        2. Sentiment Analysis: News sentiment is {sentiment_text} with a score of {sentiment_score:.2f} on a scale from 0 to 1, suggesting market perception is favorable.
+        
+        3. Technical Indicators: The LSTM prediction model, which incorporates 60 days of historical price movements, suggests continued upward movement, creating a potential buying opportunity.
+        
+        This combination of positive price prediction and {sentiment_text} news sentiment provides a strong case for increasing positions in Tesla stock at this time.
+        """
+    elif recommendation == "SELL":
+        reasoning = f"""
+        Based on the predictive analysis of Tesla (TSLA) stock, I recommend a SELL position with {confidence:.1f}% confidence.
+        
+        Key factors supporting this recommendation:
+        
+        1. Price Weakness: The model predicts a price decrease of {abs(price_change_pct):.2f}% from ${latest_price:.2f} to ${predicted_price:.2f}, indicating downward pressure.
+        
+        2. Sentiment Analysis: News sentiment is {sentiment_text} with a score of {sentiment_score:.2f} on a scale from 0 to 1, which may reflect emerging concerns in the market.
+        
+        3. Technical Indicators: The LSTM prediction model, incorporating 60 days of historical price movements, suggests a potential reversal or continuation of negative price action.
+        
+        Given these factors, particularly the predicted price decline and {sentiment_text} sentiment, reducing exposure to Tesla stock appears prudent at this time.
+        """
+    else:  # HOLD
+        reasoning = f"""
+        Based on the predictive analysis of Tesla (TSLA) stock, I recommend a HOLD position with {confidence:.1f}% confidence.
+        
+        Key factors supporting this recommendation:
+        
+        1. Price Stability: The model predicts a small price change of {price_change_pct:.2f}% from ${latest_price:.2f} to ${predicted_price:.2f}, suggesting relatively stable price action.
+        
+        2. Sentiment Analysis: News sentiment is {sentiment_text} with a score of {sentiment_score:.2f} on a scale from 0 to 1, which indicates neither strong positive nor negative market perception.
+        
+        3. Technical Indicators: The LSTM prediction model, based on 60 days of historical prices, does not show a clear directional signal that would warrant taking new positions.
+        
+        With no strong directional bias indicated by either the price prediction or sentiment analysis, maintaining current positions is the most prudent approach until clearer signals emerge.
+        """
+    
+    return reasoning
 
 # This function calculates a date 100 days prior to the provided date
 # We use 100 days to ensure we have enough data (at least 60 days) even with missing trading days
@@ -193,8 +258,7 @@ if st.button("Predict Stock Price"):
                 """
             )
 
-            final_prompt = prompt.format(summary=stock_summary)
-            advice = llm.invoke(final_prompt)
+            advice = get_investment_recommendation(symbol, latest_price, predicted_price, sentiment_score)
             # Display the LLM's financial analysis and reasoning
             st.subheader("🧠 LLM Financial Reasoning:")
             st.info(advice)
